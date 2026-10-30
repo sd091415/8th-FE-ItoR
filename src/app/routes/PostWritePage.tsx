@@ -62,7 +62,6 @@ export function PostWritePage() {
 
   async function publish(draft: PostDraft) {
     if (postId) {
-      if (!detail.data?.isOwner) throw new Error('작성자만 게시글을 수정할 수 있습니다.');
       await updatePost.mutateAsync({ postId, draft });
       navigate(`/posts/${postId}`, { replace: true });
     } else {

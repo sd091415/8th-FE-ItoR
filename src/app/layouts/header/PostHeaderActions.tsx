@@ -76,7 +76,7 @@ export function PostHeaderActions({
           menuButton.current?.focus();
         }}
         onConfirm={async () => {
-          if (!canManage || pending) return;
+          if (pending) return;
           if (await onDelete()) setDeleteOpen(false);
         }}
       />

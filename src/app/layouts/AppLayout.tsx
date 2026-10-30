@@ -77,8 +77,8 @@ export function AppLayout() {
 
   async function removeCurrentPost() {
     if (deleting.current || postPending) return false;
-    if (!currentPost || !canManagePost) {
-      notify.error('작성자만 게시글을 삭제할 수 있습니다.');
+    if (!currentPost) {
+      notify.error('게시글을 찾을 수 없습니다.');
       return false;
     }
     deleting.current = true;
@@ -136,8 +136,7 @@ export function AppLayout() {
         canManagePost={canManagePost}
         postPending={postPending}
         onEditPost={() => {
-          if (currentPost && canManagePost && !postPending)
-            navigate(`/posts/${currentPost.id}/edit`);
+          if (currentPost && !postPending) navigate(`/posts/${currentPost.id}/edit`);
         }}
         onDeletePost={removeCurrentPost}
       />

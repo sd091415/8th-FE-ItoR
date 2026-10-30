@@ -35,9 +35,6 @@ export function CommentSection({
   }
 
   async function editComment(id: string, content: string) {
-    if (!currentUser || !comments.some((comment) => comment.id === id && comment.isOwner)) {
-      throw new Error('작성자만 댓글을 수정할 수 있습니다.');
-    }
     await onEdit(id, content);
     setMessage('');
     notify.success('저장되었습니다!');
@@ -45,9 +42,6 @@ export function CommentSection({
   }
 
   async function deleteComment(id: string) {
-    if (!currentUser || !comments.some((comment) => comment.id === id && comment.isOwner)) {
-      throw new Error('작성자만 댓글을 삭제할 수 있습니다.');
-    }
     await onDelete(id);
     setMessage('');
     notify.success('삭제가 완료되었습니다!');

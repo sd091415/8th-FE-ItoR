@@ -42,11 +42,7 @@ export function useUpdatePostMutation() {
     mutationFn: async ({ postId, draft }: { postId: string; draft: PostDraft }) => {
       const session = requireSession();
       const body = createPostBody(draft);
-      const detail = queryClient.getQueryData<{ isOwner: boolean }>(
-        postQueries.detail(postId, session.hasSession, session.revision),
-      );
       requireSameSession(session);
-      if (!detail?.isOwner) throw new Error('작성자만 게시글을 수정할 수 있습니다.');
       const response = await postsApi.update(postId, body);
       return response.data;
     },
@@ -61,11 +57,7 @@ export function useDeletePostMutation() {
     mutationKey: [...postQueries.all, 'delete'],
     mutationFn: async (postId: string) => {
       const session = requireSession();
-      const detail = queryClient.getQueryData<{ isOwner: boolean }>(
-        postQueries.detail(postId, session.hasSession, session.revision),
-      );
       requireSameSession(session);
-      if (!detail?.isOwner) throw new Error('작성자만 게시글을 삭제할 수 있습니다.');
       const response = await postsApi.delete(postId);
       return response.data;
     },

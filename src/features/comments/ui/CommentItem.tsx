@@ -32,7 +32,7 @@ export function CommentItem({ comment, currentUser, now, onEdit, onDelete }: Com
   const owned = currentUser !== null && comment.isOwner;
 
   async function deleteComment() {
-    if (!owned || deletingRef.current) return;
+    if (deletingRef.current) return;
     deletingRef.current = true;
     setDeleting(true);
     setDeleteError('');
@@ -102,11 +102,9 @@ export function CommentItem({ comment, currentUser, now, onEdit, onDelete }: Com
                     label: '삭제하기',
                     destructive: true,
                     onSelect: () => {
-                      if (owned) {
-                        selectedAction.current = 'delete';
-                        setDeleteError('');
-                        setDeleteOpen(true);
-                      }
+                      selectedAction.current = 'delete';
+                      setDeleteError('');
+                      setDeleteOpen(true);
                     },
                   },
                 ]}
@@ -125,7 +123,6 @@ export function CommentItem({ comment, currentUser, now, onEdit, onDelete }: Com
                 requestAnimationFrame(() => menuButton.current?.focus());
               }}
               onSubmit={async (content) => {
-                if (!owned) throw new Error('작성자만 댓글을 수정할 수 있습니다.');
                 await onEdit(comment.id, content);
                 setEditing(false);
               }}
