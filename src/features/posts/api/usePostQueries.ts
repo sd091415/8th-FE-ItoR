@@ -8,8 +8,24 @@ import { mapPostDetail, mapPostSummary } from '../lib/mapPostResponse';
 import type { PostListParams } from '../model/postResponse';
 import { postQueries } from './postQueries';
 import { postsApi } from './postsApi';
+import { getMyPosts } from './getMyPosts';
 
 type PostSession = ReturnType<typeof getAuthSnapshot>;
+
+export function myPostQueryOptions(session: PostSession) {
+  return {
+    queryKey: postQueries.mine(session.revision),
+    queryFn: ({ signal }: { signal: AbortSignal }) => getMyPosts(session.revision, signal),
+    staleTime: 60_000,
+    retry: false,
+    meta: { requiresAuth: true },
+  };
+}
+
+export function useMyPostListQuery(enabled: boolean) {
+  const session = useSyncExternalStore(subscribeAuthSession, getAuthSnapshot);
+  return useQuery({ ...myPostQueryOptions(session), enabled: enabled && session.hasSession });
+}
 
 export function postListQueryOptions(params: PostListParams, session: PostSession) {
   return {

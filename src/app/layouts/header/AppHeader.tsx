@@ -21,6 +21,7 @@ interface AppHeaderProps {
   onWrite: () => void;
   canManagePost: boolean;
   postPending: boolean;
+  profilePending: boolean;
   onEditPost: () => void;
   onDeletePost: () => Promise<boolean>;
   sidebarOpen: boolean;
@@ -36,6 +37,7 @@ export function AppHeader({
   onWrite,
   canManagePost,
   postPending,
+  profilePending,
   onEditPost,
   onDeletePost,
   sidebarOpen,
@@ -77,7 +79,7 @@ export function AppHeader({
           )}
           {pathname === '/' && <HomeHeaderActions onWrite={onWrite} />}
           {isProfilePage && signedIn && (
-            <ProfileHeaderActions editing={pathname.endsWith('/edit')} />
+            <ProfileHeaderActions editing={pathname.endsWith('/edit')} pending={profilePending} />
           )}
           {isPostPage && (
             <PostHeaderActions

@@ -28,7 +28,7 @@ export function useAuthSession() {
   return {
     user: session.hasSession ? (user.data ?? null) : null,
     isRestoring: session.hasSession && user.isPending,
-    error: user.isError ? getApiErrorMessage(user.error) : null,
+    error: user.isError && !user.data ? getApiErrorMessage(user.error) : null,
     retry: () => {
       void user.refetch();
     },

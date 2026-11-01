@@ -57,8 +57,6 @@ export function useLayoutAuth() {
     isRestoring: session.isRestoring,
     authError: session.error,
     retryAuth: session.retry,
-    // shortcut: 프로필 변경 API는 별도 연결 전까지 저장 성공으로 처리하지 않는다.
-    updateProfile: () => false,
     openLogin,
     changeLoginOpen,
     completeLogin,

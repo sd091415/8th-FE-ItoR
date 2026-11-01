@@ -7,10 +7,10 @@
 - Vite + React + TypeScript + Tailwind CSS 기반 SPA다. `src/main.tsx`에서 `QueryProvider`로 앱을 감싸고 `src/app/App.tsx`의 React Router 7 `BrowserRouter`가 라우트를 구성한다. 라우트 컴포넌트는 lazy import와 Suspense로 로드한다.
 - `@tanstack/react-query`와 `axios`가 설치되어 있다. `app/providers/QueryProvider.tsx`의 QueryClient와 `shared/apis/client.ts`의 `api`를 재사용한다.
 - 공통 클라이언트는 `VITE_API_BASE_URL`을 사용하고 네트워크 실패를 처리한다. `auth/api/authSession.ts`가 보호된 백엔드 요청의 인증 헤더와 토큰 재발급을 연결한다. access token은 메모리, refresh token과 인증 방식은 `shared/apis/tokenSession.ts`를 통해 sessionStorage에 보관한다.
-- 이메일 가입·로그인은 `auth/api/`의 Mutation 훅, 내 정보는 `profile/api/`의 Query 훅으로 연결되어 있다. 이메일 로그인은 토큰과 내 정보 조회가 완료된 뒤 성공 처리한다. `useLayoutAuth`는 로그인 창·로그인 후 이동을 조합한다. 카카오는 인증 화면 이동과 콜백의 인가 코드 교환·결과 표시까지 연결되며, 서비스 로그인·추가 가입과 사진 업로드는 계약 확인이 필요하다.
-- 게시물·댓글은 `usePreviewPosts`·`usePreviewComments`의 세션 내 미리보기 상태다. 프로필 화면은 서버의 내 정보를 표시하지만 변경 저장은 아직 제공하지 않는다. 컴포넌트 갤러리의 로그인 미리보기는 해당 화면에만 적용한다.
-- 게시물 목록은 현재 메모리 데이터를 필터링·분할한다. URL의 `page`와 `view=mine`이 탐색 상태를 표현한다. 서버 연결 시 페이지 조건은 유지하고 데이터 조회는 API로 전환한다.
-- 선택한 사진과 게시물 이미지는 로컬 미리보기로 처리한다. 서버 업로드는 연결되지 않았다. Zustand와 React Compiler는 도입되어 있지 않다.
+- 이메일 가입·로그인은 `auth/api/`의 Mutation 훅, 내 정보는 `profile/api/`의 Query 훅으로 연결되어 있다. 이메일 로그인은 토큰과 내 정보 조회가 완료된 뒤 성공 처리한다. `useLayoutAuth`는 로그인 창·로그인 후 이동을 조합한다. 카카오는 인증 화면 이동과 콜백의 인가 코드 교환·결과 표시까지 연결되며, 서비스 로그인·추가 가입은 계약 확인이 필요하다.
+- 프로필 화면은 내 정보 Query와 USER 수정 Mutation을 사용한다. 기본 정보·닉네임·사진·비밀번호 변경은 서버 응답 이후 처리하며, 저장 후 내 정보와 게시물 캐시를 갱신한다. 컴포넌트 갤러리의 로그인 미리보기는 해당 화면에만 적용한다.
+- 게시물 목록은 기능별 Query로 조회하고 URL의 `page`와 `view=mine`이 탐색 상태를 표현한다. 내 글 전용 API가 없어 나의 깃로그는 전체 목록과 인증 상세의 `isOwner`를 확인한 결과를 캐시하고, 본인 글을 페이지당 10개씩 표시한다. 상세 요청은 최대 4개씩 보내며 게시글이 많으면 조회 비용이 증가한다. 전용 API가 생기면 이 대체 조회를 교체한다.
+- 게시글·프로필 사진은 각 기능의 Mutation 훅에서 `shared/apis/uploadImage.ts`를 재사용한다. 서명 URL 발급 후 저장소에 파일을 PUT하고 공개 S3 객체 URL을 사용한다. 외부 저장소에는 백엔드 토큰을 보내지 않는다. 프로필은 업로드 완료 URL만 사진 수정 요청에 포함하고, 파일 재선택·화면 종료 시 이전 업로드를 중단한다. Zustand와 React Compiler는 도입되어 있지 않다.
 
 ## Folder Structure
 

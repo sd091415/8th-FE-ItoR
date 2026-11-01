@@ -8,16 +8,16 @@ import {
   type SubmitEvent,
 } from 'react';
 
-import type { SignupErrors, SignupFieldName } from '@/features/auth/model/signup';
 import { CreateIcon, KakaoIcon } from '@/shared/assets/icons';
 import { ProfileAvatar } from '@/shared/ui/ProfileAvatar';
 import { TextField } from '@/shared/ui/TextField';
 import { notify } from '@/shared/ui/StatusToast';
 import { cn } from '@/shared/utils/cn';
 
-import { readProfilePhoto } from '../lib/readProfilePhoto';
 import { validateProfile } from '../lib/validateProfile';
-import type { Profile, ProfileDraft } from '../model/profile';
+import { readProfilePhoto } from '../lib/readProfilePhoto';
+import { useProfileImageUploadMutation } from '../api/useProfileImageUploadMutation';
+import type { Profile, ProfileDraft, ProfileErrors, ProfileFieldName } from '../model/profile';
 
 interface ProfileFieldProps extends Omit<ComponentProps<'input'>, 'size'> {
   label: string;
@@ -56,10 +56,16 @@ function ProfileField({ label, error, id, ...props }: ProfileFieldProps) {
 interface ProfileSettingsFormProps {
   profile: Profile;
   editing: boolean;
-  onSave: (draft: ProfileDraft) => void;
+  pending: boolean;
+  onSave: (draft: ProfileDraft) => Promise<boolean>;
 }
 
-export function ProfileSettingsForm({ profile, editing, onSave }: ProfileSettingsFormProps) {
+export function ProfileSettingsForm({
+  profile,
+  editing,
+  pending,
+  onSave,
+}: ProfileSettingsFormProps) {
   const [values, setValues] = useState<ProfileDraft>({
     email: profile.email,
     name: profile.name,
@@ -71,24 +77,68 @@ export function ProfileSettingsForm({ profile, editing, onSave }: ProfileSetting
     passwordConfirmation: '',
   });
   const [submitted, setSubmitted] = useState(false);
-  const [touched, setTouched] = useState<Partial<Record<SignupFieldName, boolean>>>({});
+  const [touched, setTouched] = useState<Partial<Record<ProfileFieldName, boolean>>>({});
+  const submitting = useRef(false);
+  const photoRequest = useRef(0);
+  const photoController = useRef<AbortController | null>(null);
   const [loadingPhoto, setLoadingPhoto] = useState(false);
   const [photoError, setPhotoError] = useState('');
-  const photoRequest = useRef(0);
+  const upload = useProfileImageUploadMutation();
   const form = useRef<HTMLFormElement>(null);
-  const errors: SignupErrors = Object.fromEntries(
+  const errors: ProfileErrors = Object.fromEntries(
     Object.entries(editing ? validateProfile(values, profile.method) : {}).filter(
-      ([name]) => submitted || touched[name as SignupFieldName],
+      ([name]) => submitted || touched[name as ProfileFieldName],
     ),
   );
   const isEmail = profile.method === 'email';
 
   useEffect(
     () => () => {
-      photoRequest.current += 1;
+      photoRequest.current++;
+      photoController.current?.abort();
     },
     [],
   );
+
+  async function selectPhoto(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file || pending) return;
+    photoController.current?.abort();
+    const request = ++photoRequest.current;
+    const controller = new AbortController();
+    photoController.current = controller;
+    setLoadingPhoto(true);
+    setPhotoError('');
+    try {
+      const preview = await readProfilePhoto(file);
+      if (request !== photoRequest.current || controller.signal.aborted) return;
+      setValues((previous) => ({ ...previous, avatarUrl: preview }));
+      const imageUrl = await upload.mutateAsync({ file, signal: controller.signal });
+      if (request === photoRequest.current && !controller.signal.aborted) {
+        setValues((previous) => ({ ...previous, avatarUrl: imageUrl }));
+      }
+    } catch (error) {
+      if (request === photoRequest.current && !controller.signal.aborted) {
+        setPhotoError(error instanceof Error ? error.message : '사진 업로드에 실패했습니다.');
+      }
+    } finally {
+      if (request === photoRequest.current) {
+        setLoadingPhoto(false);
+        photoController.current = null;
+      }
+    }
+  }
+
+  function keepPreviousPhoto() {
+    photoRequest.current++;
+    photoController.current?.abort();
+    photoController.current = null;
+    upload.reset();
+    setLoadingPhoto(false);
+    setPhotoError('');
+    setValues((previous) => ({ ...previous, avatarUrl: profile.avatarUrl }));
+  }
 
   function change(event: ChangeEvent<HTMLInputElement>) {
     const { name, value } = event.currentTarget;
@@ -101,44 +151,23 @@ export function ProfileSettingsForm({ profile, editing, onSave }: ProfileSetting
     setTouched((previous) => ({ ...previous, [name]: true }));
   }
 
-  function field(name: SignupFieldName) {
+  function field(name: ProfileFieldName) {
     return {
       id: `profile-${name}`,
       name,
-      value: values[name],
+      value: values[name] ?? '',
       readOnly: !editing,
       onChange: change,
       onBlur: blur,
+      disabled: pending,
     };
   }
 
-  async function selectPhoto(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = '';
-    if (!file) return;
-    const request = ++photoRequest.current;
-    setLoadingPhoto(true);
-    setPhotoError('');
-    try {
-      const avatarUrl = await readProfilePhoto(file);
-      if (photoRequest.current === request) setValues((previous) => ({ ...previous, avatarUrl }));
-    } catch (error) {
-      if (photoRequest.current === request)
-        setPhotoError(error instanceof Error ? error.message : '사진을 불러올 수 없습니다.');
-    } finally {
-      if (photoRequest.current === request) setLoadingPhoto(false);
-    }
-  }
-
-  function submit(event: SubmitEvent<HTMLFormElement>) {
+  async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!editing) return;
-    if (loadingPhoto) {
-      notify.error('프로필 사진을 불러오는 중입니다.');
-      return;
-    }
-    if (photoError) {
-      notify.error(photoError);
+    if (!editing || pending || submitting.current) return;
+    if (loadingPhoto || photoError) {
+      notify.error(loadingPhoto ? '프로필 사진을 업로드하고 있습니다.' : photoError);
       return;
     }
     setSubmitted(true);
@@ -149,11 +178,24 @@ export function ProfileSettingsForm({ profile, editing, onSave }: ProfileSetting
       if (input instanceof HTMLInputElement) input.focus();
       return;
     }
-    onSave(values);
+    submitting.current = true;
+    try {
+      if (await onSave(values)) {
+        setValues((previous) => ({ ...previous, password: '', passwordConfirmation: '' }));
+      }
+    } finally {
+      submitting.current = false;
+    }
   }
 
   return (
-    <form id="profile-settings" ref={form} noValidate onSubmit={submit}>
+    <form
+      id="profile-settings"
+      ref={form}
+      noValidate
+      onSubmit={submit}
+      aria-busy={pending || loadingPhoto}
+    >
       <section aria-label="프로필 정보" className="border-b border-neutral-100 bg-neutral-100">
         <div className="mx-auto w-full max-w-[688px] pt-9 pb-3 sm:pt-16 sm:pb-5">
           <div className="px-4 py-3">
@@ -171,6 +213,7 @@ export function ProfileSettingsForm({ profile, editing, onSave }: ProfileSetting
                     accept="image/*"
                     aria-label="프로필 사진 변경"
                     onChange={selectPhoto}
+                    disabled={pending}
                     className="sr-only"
                   />
                   <CreateIcon aria-hidden="true" className="size-4 [&_path]:fill-current" />
@@ -178,14 +221,24 @@ export function ProfileSettingsForm({ profile, editing, onSave }: ProfileSetting
               )}
             </div>
             {loadingPhoto && (
-              <p role="status" className="mt-1 text-xs text-neutral-400">
-                사진을 불러오는 중입니다.
+              <p role="status" className="mt-2 text-xs text-neutral-400">
+                프로필 사진을 업로드하고 있습니다.
               </p>
             )}
             {photoError && (
-              <p role="alert" className="mt-1 text-xs text-gitlog-danger">
+              <p role="alert" className="mt-2 text-xs text-gitlog-danger">
                 {photoError}
               </p>
+            )}
+            {editing && (loadingPhoto || photoError || values.avatarUrl !== profile.avatarUrl) && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={keepPreviousPhoto}
+                className="mt-2 text-xs text-gitlog-action underline"
+              >
+                기존 사진 유지
+              </button>
             )}
           </div>
           <div className="flex flex-col gap-3 px-4 py-3">
@@ -210,7 +263,7 @@ export function ProfileSettingsForm({ profile, editing, onSave }: ProfileSetting
                   errors.nickname ? 'text-gitlog-danger' : 'text-stone-300',
                 )}
               >
-                {errors.nickname ?? '* 20글자 이내'}
+                {errors.nickname ?? '* 영문과 숫자 3~20글자'}
               </p>
             </div>
             <div>
@@ -271,7 +324,6 @@ export function ProfileSettingsForm({ profile, editing, onSave }: ProfileSetting
           label={isEmail ? '메일' : '이메일'}
           type="email"
           autoComplete="email"
-          disabled={editing && isEmail}
         />
         {isEmail && (
           <>
@@ -293,13 +345,7 @@ export function ProfileSettingsForm({ profile, editing, onSave }: ProfileSetting
             />
           </>
         )}
-        <ProfileField
-          {...field('name')}
-          error={errors.name}
-          label="이름"
-          autoComplete="name"
-          disabled={editing && isEmail}
-        />
+        <ProfileField {...field('name')} error={errors.name} label="이름" autoComplete="name" />
         <ProfileField
           {...field('birthDate')}
           error={errors.birthDate}
